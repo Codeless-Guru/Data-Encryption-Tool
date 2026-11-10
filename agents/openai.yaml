@@ -1,0 +1,40 @@
+interface:
+  display_name: "Data Encryption Tool"
+  short_description: "按列/行加密 Excel、CSV 与粘贴数据，未选中内容零改动"
+  default_prompt: "Use $Data-Encryption-Tool to encrypt the specified columns of my Excel/CSV file, keeping all other cells and formatting untouched."
+  hints:
+    - "加密某列"
+    - "手机号脱敏"
+    - "把密文解回去"
+
+policy:
+  allow_implicit_invocation: true
+  requires:
+    bins: []
+    python_packages: ["cryptography>=42"]
+    optional_python_packages: ["gmssl"]   # 仅 --alg sm4gcm 需要
+    optional_bins: ["age"]                # 仅 --alg age 需要
+  secrets:
+    - name: DET_PASSPHRASE
+      prompt: "请在本轮对话中直接给出加密口令（不会写入任何文件）"
+      persist: false
+      log: redact
+  file_access:
+    read:  ["**/*.xlsx", "**/*.xlsm", "**/*.csv", "**/*.tsv", "**/*.txt"]
+    write: ["**/*.encrypted.xlsx", "**/*.encrypted.csv", "**/*.encrypted.tsv"]
+    never_overwrite_source: true
+
+defaults:
+  algorithm: aesgcm
+  keep_header: true
+  empty_cell: passthrough          # 空格保持空，不产出密文
+  idempotent_skip: true            # 已是 enc:v1: 的格子跳过
+  output_suffix: ".encrypted"
+  on_unsupported_feature: warn     # 图表/透视表 → 先提醒再继续
+
+guardrails:
+  - "口令不写入 SKILL.md、openai.yaml、日志或任何输出文件"
+  - "绝不覆盖源文件；同名输出加 _2/_3"
+  - "交付前必须跑通 SKILL.md 第 4 节的 8 条断言 + CSV 3 条"
+  - "检测到图表/透视表/VBA 时先告知可能丢保真，再问是否继续"
+  - "mask / hmac 必须显式声明不可逆，禁止称为「加密」"

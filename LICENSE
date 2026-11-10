@@ -1,0 +1,41 @@
+MIT License
+
+Copyright (c) 2026 Data-Encryption-Tool contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+────────────────────────────────────────────────────────────────────────────
+补充说明（非 MIT 条款正文，仅属项目声明，不影响上述许可效力）
+
+1. 密码学组件为独立第三方项目，按各自许可证分发：
+   - cryptography   Apache License 2.0 / BSD 3-Clause
+   - openpyxl       MIT
+   - gmssl（可选）  BSD 3-Clause
+   - age / rage（可选）MIT / Apache 2.0
+   请在分发时一并保留其 NOTICE 与许可证文本。
+
+2. SM4-GCM 的实现依赖可选的 gmssl 包，本仓库不含任何国密算法实现源码，
+   仅提供调用适配；合规适用性请自行评估。
+
+3. 本工具提供的是「单元格级」数据保护，不构成完整的数据安全方案。
+   密钥管理、口令强度、口令分发与轮换由使用方自行负责；作者不对因口令
+   遗失、口令泄露或误用 mask/HMAC 模式（不可逆）导致的数据损失承担责任。
+
+4. 本仓库所有示例数据（张三/李四/王五/赵六、13812345678、
+   110105199003071234、a.b@corp.com 等）均为虚构，不对应任何真实自然人。
