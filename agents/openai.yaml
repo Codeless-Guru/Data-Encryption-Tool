@@ -13,7 +13,7 @@ policy:
     bins: []
     python_packages: ["cryptography>=42"]
     optional_python_packages: ["gmssl"]   # 仅 --alg sm4gcm 需要
-    optional_bins: ["age"]                # 仅 --alg age 需要
+    optional_bins: []                     # age 仅属 v0.2 规划（--alg age），v0.1.0 未实现
   secrets:
     - name: DET_PASSPHRASE
       prompt: "请在本轮对话中直接给出加密口令（不会写入任何文件）"
@@ -35,6 +35,6 @@ defaults:
 guardrails:
   - "口令不写入 SKILL.md、openai.yaml、日志或任何输出文件"
   - "绝不覆盖源文件；同名输出加 _2/_3"
-  - "交付前必须跑通 SKILL.md 第 4 节的 8 条断言 + CSV 3 条"
+  - "交付前必须跑通 tests/test_skill.py 的自动断言（19 项 + SM4 条件项）；字体/颜色/列宽/数字格式按 SKILL.md 第 4 节人工核对"
   - "检测到图表/透视表/VBA 时先告知可能丢保真，再问是否继续"
   - "mask / hmac 必须显式声明不可逆，禁止称为「加密」"

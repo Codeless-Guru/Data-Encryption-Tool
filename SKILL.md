@@ -1,10 +1,11 @@
 ---
 name: Data-Encryption-Tool
+version: 0.1.0
 description: >-
   对用户粘贴的表格数据，或本地 Excel（.xlsx/.xlsm）、CSV/TSV 文件，按「列」或「行」
-  做可逆加密与解密。可选算法：AES-256-GCM（默认）、AES-256-CBC、ChaCha20-Poly1305、
-  Fernet、AGE(年龄公钥/X25519)、国密 SM4-GCM（需本地有 gmssl）；另有单向 HMAC-SHA256
-  脱敏与掩码两种「不可解密」模式。核心保证：未选中的单元格逐格零改动，字体/颜色/合并/
+  做可逆加密与解密。v0.1.0 已实现的算法：AES-256-GCM（默认）、ChaCha20-Poly1305、
+  Fernet、国密 SM4-GCM（需本地有 gmssl）；另有单向 HMAC-SHA256 脱敏与掩码两种
+  「不可解密」模式。AES-256-CBC 与 AGE 公钥模式属规划项，本版未实现（调用抛未知算法）。核心保证：未选中的单元格逐格零改动，字体/颜色/合并/
   列宽/数字格式/日期类型/公式/工作表顺序/CSV 的 BOM 与换行符全部原样保留；结果另存为
   原名.encrypted.xlsx，绝不覆盖原件；口令不写入文件、日志与对话记录。
   触发词：加密这一列、把手机号脱敏、密文导出、解密回去、列加密、excel 加密某几列。
@@ -67,7 +68,7 @@ def encrypt(plain: str, pw: bytes, alg="aesgcm") -> str:
         ct = ChaCha20Poly1305(_key(pw, salt)).encrypt(nonce, plain.encode(), b"DETv1")
     elif alg == "fernet":
         from cryptography.fernet import Fernet
-        k = _u(_key(pw, salt, 32)) if False else base64.urlsafe_b64encode(_key(pw, salt, 32))
+        k = base64.urlsafe_b64encode(_key(pw, salt, 32))   # Fernet 要 urlsafe base64 的 32B 密钥
         ct = Fernet(k).encrypt(plain.encode())
         return f"enc:v1:fernet:{_b(salt)}:{_b(nonce)}:{_b(ct)}"   # nonce 位占位，保持 5 段同构
     elif alg == "sm4gcm":                                        # 国密，需 pip install gmssl
@@ -111,10 +112,12 @@ def mask(plain: str) -> str:                    # 不可逆：仅展示用
         u, d = s.split("@", 1); return (u[0] + "***" + u[-1:] + "@" + d) if len(u) > 2 else "***@" + d
     return s[0] + "*" * (len(s) - 2) + s[-1:]
 
-MODES = {"aesgcm": "AES-256-GCM（默认，推荐）", "aesgcm-cbc": "AES-256-CBC",
+MODES = {"aesgcm": "AES-256-GCM（默认，推荐）",
          "chacha20": "ChaCha20-Poly1305", "fernet": "Fernet",
          "sm4gcm": "SM4-GCM（国密，需 gmssl）", "hmac": "HMAC-SHA256（单向，不可解密）",
-         "mask": "掩码（单向，不可解密）", "age": "AGE/X25519 公钥（需 age 二进制，多人只加密场景）"}
+         "mask": "掩码（单向，不可解密）"}
+# 规划中、v0.1.0 未实现（调用会抛 ValueError 未知算法）：
+#   aesgcm-cbc → AES-256-CBC；age → AGE/X25519 公钥（需 age 二进制）
 
 # ---- Excel 层：openpyxl，只改 value，不碰 style ----
 from openpyxl import load_workbook
@@ -232,7 +235,7 @@ def process_csv(raw_bytes, cols, pw, mode="encrypt", keep_header=True, dialect=N
 | `chacha20` | ✅ | 无 AES-NI 的机器 / 偏好流加密 | 同样带认证 |
 | `fernet` | ✅ | 要和现有 Python 服务互通 | 密文略长 |
 | `sm4gcm` | ✅ | 合规要求国密 | 先 `python -c "import gmssl"` 探测，没有就明说并回退 aesgcm，**不要静默换** |
-| `age` | ✅ | 多人只加密不解密（给运营/外包填表） | 需 `age` CLI；公钥加密，本人私钥解 |
+| `age` | ⏳ | 多人只加密不解密（给运营/外包填表） | **v0.1.0 未实现**（规划 v0.2）；需 `age` CLI，公钥加密、本人私钥解 |
 | `hmac` | ❌ | 要拿脱敏列去做 JOIN / 去重 | 同明文同摘要，可被字典猜，别当加密用 |
 | `mask` | ❌ | 只给人眼看 | 纯展示，无任何密钥保护 |
 
@@ -273,7 +276,8 @@ def assert_roundtrip(src, dst, ws_name, cols, pw, mode="aesgcm", header_row=1):
                 assert va == vb, f"({r},{c}) 未选中单元格被改动: {va!r} -> {vb!r}"
                 sa, sb = aw.cell(r, c), bw.cell(r, c)
                 assert sa.font.b == sb.font.b and sa.font.color.rgb == sb.font.color.rgb
-                assert sa.number_format == sb.number_format and sa.value is not vb if False else True
+                assert sa.number_format == sb.number_format, f"({r},{c}) 数字格式变了"
+                assert aw.cell(r, c).data_type == bw.cell(r, c).data_type, f"({r},{c}) 单元格类型变了"
     for col in "ABCDEFGHIJ":
         assert aw.column_dimensions[col].width == bw.column_dimensions[col].width, f"{col} 列宽变了"
     # 负向用例：错口令 / 篡改 1 bit / 明文当密文，三者都必须抛异常
@@ -294,6 +298,8 @@ def assert_roundtrip(src, dst, ws_name, cols, pw, mode="aesgcm", header_row=1):
 
 **8 条断言速查**：① sheet 顺序 ② 合并区域 ③ 密文都带 `enc:v1:` ④ 未选中格逐格相等 ⑤ 字体/颜色 ⑥ 列宽 ⑦ 数字格式与日期/公式类型 ⑧ 三个负向用例全被拒 + 同明文密文不同。CSV 再补 3 条：BOM 有且仅一份、行尾数 = 数据行 + 内嵌换行数、`"张,三"` 不错行。
 
+> ⚠️ 本节是**人工核对模板**：`tests/test_skill.py` 的自动断言目前覆盖 ① ② ③ ④（值维度）与 ⑧，**未覆盖 ⑤ ⑥ ⑦**（编号 4–7 为空号，计划 v0.1.1 补齐），交付前须按本段手工比对字体/列宽/数字格式。
+
 ---
 
 ## 5. Examples
@@ -305,7 +311,7 @@ def assert_roundtrip(src, dst, ws_name, cols, pw, mode="aesgcm", header_row=1):
 → 走粘贴通道，`mode=mask`，按原 ` | ` 对齐输出，`13812345678 → 138****5678`，并声明「掩码不可逆，需要还原请改用 aesgcm」。
 
 **E3** 用户：「导给外包填，他们只能写不能看。」
-→ `mode=age` + 外包公钥；没有 age 环境就退回 `aesgcm` 并明确说「这版他们拿口令仍能解」。
+→ v0.1.0 未实现 `mode=age`，只能退回 `aesgcm` 并明确说「这版他们拿口令仍能解；`age` 公钥模式计划 v0.2」。
 
 **E4** 用户：「两张表要按手机号关联，但都不能出现明文。」
 → `mode=hmac`，两张表同一口令 → 摘要一致可 JOIN；同时提醒「HMAC 可被手机号字典爆破，属于脱敏不是加密」。

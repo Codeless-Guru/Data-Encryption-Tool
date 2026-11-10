@@ -1,7 +1,8 @@
 # Data-Encryption-Tool
 
 > 一个可开源的 Agent Skill：**按「列 / 行」加密 Excel、CSV 和粘贴数据，没选中的地方一个字节都不改。**
-> 支持 AES-256-GCM / AES-256-CBC / ChaCha20-Poly1305 / Fernet / SM4-GCM / AGE 公钥，另附 HMAC、掩码两种不可逆脱敏模式。
+> v0.1.0 已实现：AES-256-GCM / ChaCha20-Poly1305 / Fernet / SM4-GCM（均可逆），另附 HMAC、掩码两种不可逆脱敏模式。
+> **AES-256-CBC 与 AGE 公钥模式属规划项，本版本未实现**（调用会抛 `未知算法`），见 §2.3 算法表的 ⏳ 标注。
 
 ---
 
@@ -19,7 +20,7 @@
 
 Data-Encryption-Tool 的定位是**单元格级（cell-level）可逆加密**，并把三条最容易出事的底线做成机制而非提醒：
 
-1. **只碰选中的格子** —— 用 `openpyxl` 逐个改 `cell.value`，从不重建工作簿，样式对象原样带过；未选中单元格在测试里被逐格断言相等（含字体、颜色、数字格式、列宽、合并区、冻结窗格）。
+1. **只碰选中的格子** —— 用 `openpyxl` 逐个改 `cell.value`，从不重建工作簿，样式对象原样带过；未选中单元格在自检里**逐格断言值相等**。其中 sheet 顺序、合并区域、解密回环一致性是自动断言；字体、颜色、列宽、数字格式目前**靠人工核对**（自动断言计划 v0.1.1 补齐，见 §2.5）。
 2. **绝不覆盖源文件** —— 一律输出 `原名.encrypted.xlsx`，已存在则加 `_2`；测试第 22 条会校验源文件哈希与明文都在。
 3. **口令不落盘** —— 口令只从当次环境变量 / 交互式输入取，不写进 `SKILL.md`、`openai.yaml`、日志或任何输出文件；密文里也不含任何可推导口令的信息。
 
@@ -62,7 +63,8 @@ D:F             列区间
 | `chacha20` | ✅ | ≈120 B | 无 AES-NI 的机器 | 同为 AEAD |
 | `fernet` | ✅ | ≈130 B | 要和现有 Python/Django 服务互通 | 密文略长 |
 | `sm4gcm` | ✅ | ≈120 B | 合规要求国密 | 需 `pip install gmssl`，缺依赖时**明确报错不静默降级** |
-| `age` | ✅ | — | 外包/运营只能填不能看 | 需 `age` 或 `rage` 二进制，公钥加密 |
+| `age` | ⏳ | — | 外包/运营只能填不能看 | **v0.1.0 未实现**（规划 v0.2，需 `age`/`rage` 二进制，公钥加密） |
+| `aesgcm-cbc` | ⏳ | — | 需要 CBC 互通的老系统 | **v0.1.0 未实现**（规划 v0.2，当前仅 `MODES` 占位，调用抛 `未知算法`） |
 | `hmac` | ❌ | 固定 43 B | 两张表要按手机号 JOIN 但都不能有明文 | 同口令同摘要；手机号仅 10¹⁰ 量级，**可被字典爆破，属脱敏不属加密** |
 | `mask` | ❌ | 长度不变 | 贴邮件/截图给人看 | 无密钥保护，纯展示 |
 
@@ -81,8 +83,10 @@ enc:v1:<alg>:<base64 salt 16B>:<base64 nonce 12B>:<base64 ciphertext+tag>
 
 **已知会丢，交付时必须主动告知** ⚠️：图表 / 透视表 / 切片器 / 迷你图、VBA 窗体与 ActiveX 控件（openpyxl 不保真 → 预检 `ws._charts` / `ws._pivots`，非空先提示留底或改走 CSV 通道）；被加密列**被公式引用**时该公式会变 `#VALUE!`（dry-run 阶段就要点名）；数字加密后类型变字符串（属预期，解密后按原 `number_format` 回转）。
 
-### 2.5 交付前自检：22 条断言
-`python tests/test_skill.py` 一次跑完，覆盖 Excel 逐格零差异 / 7 项样式保真 / CSV 的 BOM+CRLF+内嵌换行 / 粘贴列对齐 / 3 算法回环 / 空格跳过 / 幂等 / 行范围·列名·列区间·无表头四种选法 / 多 sheet 语义差异 / 4 类安全负向 / 同明文密文不同 / 源文件未被覆盖 / 解包 zip 校验输出 XML 里无明文残留。当前 **19 项通过 + 1 项跳过（SM4 需 gmssl）**，退出码 0。
+### 2.5 交付前自检：19 项自动断言（+1 项条件跳过）
+`python tests/test_skill.py` 一次跑完，覆盖 Excel 未选中格逐格零差异（值维度）/ 合并区域与 sheet 顺序 / CSV 的 BOM+CRLF+内嵌换行 / 粘贴列对齐 / 3 算法回环 / 空格跳过 / 幂等 / 行范围·列名·列区间·无表头四种选法 / 多 sheet 语义差异 / 4 类安全负向 / 同明文密文不同 / 源文件未被覆盖 / 输出无明文残留。当前 **19 项通过 + 1 项跳过（SM4 需 gmssl）**，退出码 0。
+
+> 字体、颜色、列宽、数字格式**没有自动断言**（自检编号 4–7 为空号，计划 v0.1.1 补），当前必须人工核对。不要据此宣称"7 项样式自动保真"。
 
 ---
 
@@ -100,7 +104,7 @@ enc:v1:<alg>:<base64 salt 16B>:<base64 nonce 12B>:<base64 ciphertext+tag>
 ```bash
 pip install "cryptography>=42" openpyxl     # 必需（Python >= 3.10）
 pip install gmssl                            # 仅 --alg sm4gcm 需要
-brew install age        # 或 choco install age / apt install age   # 仅 --alg age 需要
+brew install age        # 或 choco install age / apt install age   # 仅 v0.2 的 --alg age 需要，v0.1.0 未实现
 ```
 依赖缺失时的行为是**明确报错并说明怎么装**，不会悄悄换成 AES 让你以为用了国密。
 
@@ -111,7 +115,7 @@ export DET_PASSPHRASE='你的口令'    # 不进 shell 历史；不设则交互�
 python tests/test_skill.py --encrypt 客户表.xlsx -c 手机号 --alg aesgcm
 python tests/test_skill.py --decrypt 客户表.encrypted.xlsx -c 手机号
 python tests/test_skill.py --encrypt 订单.csv -c phone --alg hmac
-python tests/test_skill.py            # 不带参数 = 跑 22 条自检
+python tests/test_skill.py            # 不带参数 = 跑 19 项自动自检（+SM4 条件项）
 ```
 
 ### 3.4 校验安装
@@ -134,14 +138,14 @@ Agent 会先做一次 **dry-run 预演**——报出「将加密 N 格 / 跳过 
 | `这几行贴给你，第 2 列打码，我要贴回邮件` | `mask` 模式，按原 `\t` 拼回；并声明"掩码不可逆" |
 | `两张表要按手机号关联，但都不能出现明文` | `hmac` 模式（同口令 → 同摘要 → 可 JOIN），同时提醒可被字典爆破 |
 | `把 客户表.encrypted.xlsx 的手机号解回来` | 校验 `enc:v1:` 头 → 解密 → 逐格写回原样式 → `客户表.encrypted.DECRYPTED.xlsx` |
-| `给外包填，他们只能写不能看` | 建议 `age` + 外包公钥；无 age 环境则退回 `aesgcm` 并说明"他们拿口令仍能解" |
+| `给外包填，他们只能写不能看` | v0.1.0 未实现 `age`，只能退回 `aesgcm` 并说明"他们拿口令仍能解"（`age` 模式计划 v0.2） |
 
 ### 4.2 五步工作流（写在 `SKILL.md` 第 1 节，Agent 强制走）
 1. **认输入形态** —— 粘贴 / xlsx / xlsm / csv；CSV 先问编码（默认 `utf-8-sig`）与分隔符
 2. **定范围** —— 列名 or 列字母、行范围、是否保留表头（默认保留）
 3. **定算法与口令** —— 默认 `aesgcm`；用户说"脱敏不用还原"才切 `hmac`/`mask`，并**显式告知不可逆**
 4. **dry-run 报数** —— 加密 N / 空 M / 跳页 K / 不动 X，等确认
-5. **执行 + 跑 22 条断言** —— 全绿才交付，回复里必须含：算法、加密格数、跳过格数、`skipped_sheets`、`formulas_skipped`，以及一句"口令未存储，请自行试解一格验证"
+5. **执行 + 跑 19 项自动断言** —— 全绿才交付，回复里必须含：算法、加密格数、跳过格数、`skipped_sheets`、`formulas_skipped`，以及一句"口令未存储，请自行试解一格验证"
 
 ### 4.3 Python 里当库用
 ```python
@@ -297,13 +301,13 @@ ValueError: 选列写法非法 ['A1']：只接受 列名 / 列字母(C) / 区间
 
 ```
 Data-Encryption-Tool/
-├── SKILL.md                    # 唯一权威说明书：工作流 / 核心代码 / 22 条断言
+├── SKILL.md                    # 唯一权威说明书：工作流 / 核心代码 / 19 项自动断言（+SM4 条件项）
 ├── agents/openai.yaml          # 界面元数据、依赖声明、文件权限与 5 条护栏
 ├── references/
 │   ├── format-fidelity.md      # 格式保全清单 + openpyxl 已知丢点 + CSV 三坑
 │   └── algorithm-params.md     # 各算法 KDF/nonce/tag 参数、密文体积、互通与轮换
 ├── tests/
-│   └── test_skill.py           # 22 条可执行用例 + 可用 CLI（无额外测试框架依赖）
+│   └── test_skill.py           # 19 项可执行断言（+SM4 条件项）+ 可用 CLI（无额外测试框架依赖）
 └── README.md
 ```
 

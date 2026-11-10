@@ -3,11 +3,11 @@
 | 模式 | KDF | 密钥 | Nonce/IV | 认证 | 密文增量（每格） | 互通对象 |
 |---|---|---|---|---|---|---|
 | `aesgcm`（默认） | Scrypt 2¹⁴/8/1 + salt16B | 32B | 12B 随机 | GCM tag 16B | salt16+nonce12+tag16+头≈44B + b64(4/3) ≈ **120B** | 任何 AES-256-GCM 实现 |
-| `aesgcm-cbc` | 同上 | 32B | IV16B 随机 + PKCS7 | 外层 HMAC-SHA256(前16B) | ≈140B | OpenSSL `aes-256-cbc` |
+| `aesgcm-cbc` ⏳ | 同上 | 32B | IV16B 随机 + PKCS7 | 外层 HMAC-SHA256(前16B) | ≈140B | OpenSSL `aes-256-cbc`（**v0.1.0 未实现，本表为设计参数，规划 v0.2**） |
 | `chacha20` | 同上 | 32B | 12B 随机 | Poly1305 16B | ≈120B | libsodium / `age` 内部原语 |
 | `fernet` | 同上 → urlsafe_b64 | 32B | 内嵌 16B | HMAC-SHA256 前10B | ≈130B | `cryptography.fernet`、Django 字段 |
 | `sm4gcm` | 同上（截 16B） | 16B | 12B 随机 | GCM tag 16B | ≈120B | `gmssl`、国密套件 |
-| `age` | X25519 + HKDF（Ruby/Go age 规范） | 文件密钥 | 自动 | ChaCha20-Poly1305 | 按 recipient | `age` CLI、`rage` |
+| `age` ⏳ | X25519 + HKDF（Ruby/Go age 规范） | 文件密钥 | 自动 | ChaCha20-Poly1305 | 按 recipient | `age` CLI、`rage`（**v0.1.0 未实现，本表为设计参数，规划 v0.2**） |
 | `hmac` | Scrypt + pepper `det-hmac-pepper` | 32B | 无（确定性） | — | 固定 43B hex | 任何 HMAC-SHA256 |
 | `mask` | 无 | — | — | — | 长度不变 | 人眼 |
 

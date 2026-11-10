@@ -1,0 +1,24 @@
+# 本工具的输出产物（密文 / 解密件），一律不入库
+*.encrypted.xlsx
+*.encrypted.xlsm
+*.encrypted.csv
+*.encrypted.tsv
+*.encrypted.*
+*.DECRYPTED.*
+*_2.xlsx
+*_3.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
