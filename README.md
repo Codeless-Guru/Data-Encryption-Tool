@@ -153,7 +153,7 @@ import os, sys
 sys.path.insert(0, "Data-Encryption-Tool")
 from tests.test_skill import process_xlsx, process_csv, decrypt, mask, one_way
 
-pw = os.environb[b"DET_PASSPHRASE"]
+pw = os.environ["DET_PASSPHRASE"].encode()   # Windows 没有 os.environb，跨平台统一用 os.environ
 
 # 加密：只动「手机号」列，其余连样式带公式原样
 stat = process_xlsx("客户表.xlsx", "客户表.encrypted.xlsx", ["手机号"], pw, mode="aesgcm")
